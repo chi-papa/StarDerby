@@ -1,0 +1,217 @@
+import { Horse, Stallion, Mare, Stats, Pedigree, LineageId, GrowthType, Strategy, BreedingResult } from '../types';
+
+export function generateHorseName(): string {
+  const prefixes = [
+    'サンダー', 'ギャラクシー', 'ミルキー', 'スター', 'コスモ', 'ルナ', 'ソーラー',
+    'ノヴァ', 'メテオ', 'コメット', 'アストロ', 'プラネット', 'オーロラ', 'スカイ',
+    'シリウス', 'ベガ', 'アルタイル', 'リゲル', 'カノープス', 'スピカ', 'アンタレス'
+  ];
+  const suffixes = [
+    'ノヴァ', 'ブレイド', 'ロード', 'キング', 'クイーン', 'オーブ', 'ブレイブ',
+    'ダッシュ', 'ランナー', 'ハート', 'ソウル', 'スピリット', 'エース', 'ジョーカー',
+    'インパクト', 'オーロラ', 'ギャラクシー', 'スター', 'コスモス', 'ヘヴン'
+  ];
+  return prefixes[Math.floor(Math.random() * prefixes.length)] + suffixes[Math.floor(Math.random() * suffixes.length)];
+}
+
+function getVowelType(char: string): keyof Stats | null {
+  const vowels = {
+    a: /[あかさたなはまやらわがざだばぱ]/,
+    i: /[いきしちにひみりぎじぢびぴ]/,
+    u: /[うくすつぬふむゆるぐずづぶぷ]/,
+    e: /[えけせてねへめれげぜでべぺ]/,
+    o: /[おこそとのほもよろをごぞどぼぽ]/,
+    dash: /[ー]/
+  };
+  if (vowels.a.test(char)) return 'speed';
+  if (vowels.i.test(char)) return 'stamina';
+  if (vowels.u.test(char)) return 'guts';
+  if (vowels.e.test(char)) return 'temperament';
+  if (vowels.o.test(char)) return 'luck';
+  if (vowels.dash.test(char)) return 'health';
+  return null;
+}
+
+export function checkBreeding(stallion: Stallion, mare: Mare): BreedingResult {
+  const id = Math.random().toString(36).substr(2, 9);
+  const name = generateHorseName();
+  
+  // インブリードのチェック (3代前まで)
+  const stallionAncestors = [stallion.name, stallion.pedigree.father, stallion.pedigree.mother, ...stallion.pedigree.grandFathers, ...stallion.pedigree.grandMothers];
+  const mareAncestors = [mare.name, mare.pedigree.father, mare.pedigree.mother, ...mare.pedigree.grandFathers, ...mare.pedigree.grandMothers];
+  
+  // 文字ベースのインブリード
+  const stallionChars = new Set(stallionAncestors.join('').split(''));
+  const mareChars = new Set(mareAncestors.join('').split(''));
+  
+  const inbreedingChars: string[] = [];
+  const inbreedingEffects: (keyof Stats)[] = [];
+  
+  stallionChars.forEach(char => {
+    if (char !== '?' && mareChars.has(char)) {
+      inbreedingChars.push(char);
+      const effect = getVowelType(char);
+      if (effect) inbreedingEffects.push(effect);
+    }
+  });
+
+  // ニックスのチェック (違う文字が3文字以上あるとき)
+  const stallionNameChars = new Set(stallion.name.split(''));
+  const mareNameChars = new Set(mare.name.split(''));
+  
+  let diffCount = 0;
+  stallionNameChars.forEach(c => { if (!mareNameChars.has(c)) diffCount++; });
+  mareNameChars.forEach(c => { if (!stallionNameChars.has(c)) diffCount++; });
+  
+  const isNick = diffCount >= 3;
+
+  // 爆発力の計算
+  let explosionChance = 0.05;
+  if (isNick) explosionChance += 0.15;
+  if (inbreedingChars.length > 0) explosionChance += inbreedingChars.length * 0.03;
+  
+  const explosion = Math.random() < explosionChance;
+  const explosionBonus = explosion ? 25 : 0;
+  const traits: string[] = [];
+  const growthType: GrowthType = stallion.growthType;
+
+  // 特殊文字による特性継承
+  const specialChars = [
+    { char: '流', trait: '流星の速さ' },
+    { char: '星', trait: '流星の速さ' },
+    { char: '龍', trait: '神のオーラ' },
+    { char: '神', trait: '神のオーラ' },
+    { char: '王', trait: '大逃げ' },
+    { char: '帝', trait: '大逃げ' }
+  ];
+
+  inbreedingChars.forEach(char => {
+    const special = specialChars.find(s => s.char === char);
+    if (special && Math.random() < 0.3) {
+      if (!traits.includes(special.trait)) traits.push(special.trait);
+    }
+  });
+
+  // 親からの特性継承
+  const parentTraits = [...(stallion.traits || []), ...(mare.traits || [])];
+  parentTraits.forEach(trait => {
+    if (Math.random() < 0.2) {
+      if (!traits.includes(trait)) traits.push(trait);
+    }
+  });
+
+  // 能力継承ロジック
+  const inheritStat = (s1: number, s2: number, bonus: number = 0, statName: keyof Stats, explosivePower: number = 100) => {
+    const ep = explosivePower || 100;
+    // 異次元設定: 親の能力の引き継ぎ率を上げ、ランダムベースも底上げ
+    const inheritedBase = (s1 + s2) * 0.20; // 15%ずつ -> 20%ずつ = 40%
+    const randomBase = 100 + Math.random() * 700; // 最小50 -> 100
+    
+    let base = inheritedBase + randomBase;
+    
+    // 成長タイプによる上限の変動
+    if (growthType === 'early') base -= 50;
+    if (growthType === 'late') base += 50;
+
+    // インブリードによるバラツキ幅の拡大 + 種牡馬の爆発力による拡大
+    let varianceRange = 100 + ep; 
+    const inbreedingCount = inbreedingEffects.filter(e => e === statName).length;
+    
+    if (inbreedingCount > 0) {
+      varianceRange += inbreedingCount * 80;
+    }
+
+    let variance = (Math.random() - 0.5) * varianceRange;
+    let result = base + variance + bonus;
+    
+    if (inbreedingCount > 0) {
+      result += inbreedingCount * 30;
+    }
+
+    if (isNick) {
+      result += 50;
+    }
+
+    // 900以降の出現確率を5%程度にする -> 爆発力が高い場合はこの制限を緩める
+    if (result > 900) {
+      const limitBypassChance = 0.05 + (ep / 1000); // 爆発力150なら20%の確率で制限回避
+      if (Math.random() > limitBypassChance) {
+        // 900を超えた分を大幅に圧縮する
+        result = 900 + (result - 900) * 0.1;
+      }
+    }
+
+    // 基本は1000だが、爆発力次第で超える
+    const hardLimit = 1000 + (ep > 100 ? (ep - 100) * 5 : 0); // 100を超えた分を5倍にして上限に加算
+    return Math.max(50, Math.min(hardLimit, Math.round(result)));
+  };
+
+  const maxStats: Stats = {
+    speed: inheritStat(stallion.stats.speed || 500, mare.stats.speed || 500, explosionBonus * 4, 'speed', stallion.explosivePower),
+    stamina: inheritStat(stallion.stats.stamina || 500, mare.stats.stamina || 500, explosionBonus * 4, 'stamina', stallion.explosivePower),
+    guts: inheritStat(stallion.stats.guts || 500, mare.stats.guts || 500, explosionBonus * 4, 'guts', stallion.explosivePower),
+    temperament: inheritStat(stallion.stats.temperament || 500, mare.stats.temperament || 500, inbreedingEffects.filter(e => e === 'temperament').length * 30, 'temperament', stallion.explosivePower),
+    health: inheritStat(stallion.stats.health || 700, mare.stats.health || 700, explosionBonus * 2, 'health', stallion.explosivePower),
+    luck: inheritStat(stallion.stats.luck || 700, mare.stats.luck || 700, explosionBonus * 2, 'luck', stallion.explosivePower),
+    explosiveness: Math.floor(Math.random() * 800) + 100, // 瞬発力は確率だけで決まる (100-900)
+  };
+
+  // 気性ペナルティ（インブリードが多い場合）
+  if (inbreedingChars.length > 2) {
+    maxStats.temperament = Math.max(50, maxStats.temperament - (inbreedingChars.length * 60));
+  }
+
+  const lineageId: LineageId = Math.random() > 0.5 ? stallion.lineageId : mare.lineageId;
+  const strategy: Strategy = traits.includes('大逃げ') ? 'escape' : stallion.strategy;
+
+  const pedigree: Pedigree = {
+    father: stallion.name,
+    mother: mare.name,
+    grandFathers: [stallion.pedigree.father, mare.pedigree.father],
+    grandMothers: [stallion.pedigree.mother, mare.pedigree.mother],
+    greatGrandFathers: [
+      stallion.pedigree.grandFathers[0],
+      stallion.pedigree.grandFathers[1],
+      mare.pedigree.grandFathers[0],
+      mare.pedigree.grandFathers[1]
+    ]
+  };
+
+  const horse: Horse = {
+    id,
+    name,
+    age: 0,
+    gender: Math.random() > 0.5 ? 'colt' : 'filly',
+    color: ['#3e2723', '#5d4037', '#795548', '#a1887f', '#212121', '#424242', '#9e9e9e', '#eeeeee', '#ffccbc'][Math.floor(Math.random() * 9)],
+    stats: { 
+      speed: Math.max(20, Math.round(maxStats.speed * 0.3)), 
+      stamina: Math.max(20, Math.round(maxStats.stamina * 0.3)), 
+      guts: Math.max(20, Math.round(maxStats.guts * 0.3)), 
+      temperament: Math.max(20, Math.round(maxStats.temperament * 0.3)),
+      health: Math.max(20, Math.round(maxStats.health * 0.3)),
+      luck: Math.max(20, Math.round(maxStats.luck * 0.3)),
+      explosiveness: Math.max(20, Math.round(maxStats.explosiveness * 0.3))
+    },
+    maxStats,
+    lineageId,
+    pedigree,
+    distanceAptitude: stallion.distanceAptitude,
+    growthType,
+    strategy,
+    trainingFocus: 'speed',
+    isRetired: false,
+    isGelding: false,
+    hasShadowRoll: false,
+    isInjured: false,
+    winCount: 0,
+    totalRaces: 0,
+    currentCondition: 80,
+    fatigue: 0,
+    gradedWins: [],
+    isAutoMode: false,
+    traits,
+    explosivePower: Math.max(50, (stallion.explosivePower || 100) + Math.floor((Math.random() - 0.5) * 40))
+  };
+
+  return { horse, inbreeding: inbreedingChars, inbreedingCount: inbreedingChars.length, nicks: isNick, explosion };
+}
