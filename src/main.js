@@ -7,6 +7,8 @@ import { simulateRace, generateEnemyHorses } from './logic/raceSim.js';
 import { getBreedingAdvice } from './services/geminiService.js';
 
 // --- Global State ---
+const SAVE_KEY = 'stellar_breeder_save_v1';
+
 window.state = {
   screen: 'title',
   horses: [],
@@ -23,10 +25,111 @@ window.state = {
   raceResult: null,
   raceStep: 0,
   history: [],
+  showSaveModal: false,
+};
+
+// --- Save & Load Implementation ---
+export function saveGame() {
+  try {
+    const dataToSave = {
+      horses: window.state.horses,
+      mares: window.state.mares,
+      money: window.state.money,
+      week: window.state.week,
+      month: window.state.month,
+      year: window.state.year,
+      history: window.state.history,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(dataToSave));
+  } catch (e) {
+    console.error("Failed to auto-save:", e);
+  }
+}
+
+export function loadGame() {
+  try {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      window.state.horses = data.horses || [];
+      window.state.mares = data.mares || [...INITIAL_MARES];
+      window.state.money = typeof data.money === 'number' ? data.money : 10000000;
+      window.state.week = data.week || 1;
+      window.state.month = data.month || 1;
+      window.state.year = data.year || 1;
+      window.state.history = data.history || [];
+      return true;
+    }
+  } catch (e) {
+    console.error("Failed to load game:", e);
+  }
+  return false;
+}
+
+window.exportSaveData = () => {
+  try {
+    const dataToSave = {
+      horses: window.state.horses,
+      mares: window.state.mares,
+      money: window.state.money,
+      week: window.state.week,
+      month: window.state.month,
+      year: window.state.year,
+      history: window.state.history,
+    };
+    const jsonString = JSON.stringify(dataToSave, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stellar_breeder_save_y${window.state.year}_m${window.state.month}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("エラーが発生しました: " + e.message);
+  }
+};
+
+window.importSaveData = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (typeof data.money === 'undefined' || !Array.isArray(data.horses)) {
+        throw new Error("無効なセーブデータファイル形式です。");
+      }
+      
+      window.setState({
+        horses: data.horses || [],
+        mares: data.mares || [...INITIAL_MARES],
+        money: data.money,
+        week: data.week || 1,
+        month: data.month || 1,
+        year: data.year || 1,
+        history: data.history || [],
+        screen: 'stable',
+        showSaveModal: false
+      });
+      
+      saveGame();
+      alert("セーブデータを正常にインポートしました！ゲームを再開します。");
+    } catch (err) {
+      alert("セーブデータの読込に失敗しました: " + err.message);
+    }
+  };
+  reader.readAsText(file);
 };
 
 window.setState = (updates) => {
   window.state = { ...window.state, ...updates };
+  if (['stable', 'title', 'breeding_mare', 'breeding_stallion', 'breeding_confirm', 'race_select'].includes(window.state.screen)) {
+    saveGame();
+  }
   render();
 };
 
@@ -117,6 +220,7 @@ function Button({ children, onClick, className = "", variant = "primary" }) {
 const formatMoney = (amount) => `¥${(amount / 10000).toLocaleString()}万`;
 
 function SceneTitle() {
+  const hasSave = localStorage.getItem(SAVE_KEY) !== null;
   return `
     <div class="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white p-4">
       <div class="text-center space-y-8 max-w-2xl">
@@ -125,12 +229,36 @@ function SceneTitle() {
           <span class="block">Breeder</span>
         </h1>
         <p class="text-slate-400 font-medium tracking-widest uppercase text-sm">異次元のスピード、伝説の血統をその手に。</p>
-        <div class="pt-8">
+        <div class="pt-8 flex flex-col sm:flex-row justify-center gap-4">
           ${Button({ 
-            children: "牧場を始める", 
-            onClick: () => window.setState({ screen: 'stable' }),
-            className: "text-lg px-12 py-4"
+            children: "最初から始める", 
+            onClick: () => {
+              if (hasSave && !confirm("保存されているデータを上書きして最初から始めますか？")) {
+                return;
+              }
+              window.setState({
+                screen: 'stable',
+                horses: [],
+                mares: [...INITIAL_MARES],
+                money: 10000000,
+                week: 1,
+                month: 1,
+                year: 1,
+                history: [],
+              });
+            },
+            className: "text-lg px-8 py-4",
+            variant: "primary"
           })}
+          ${hasSave ? Button({ 
+            children: "続きから始める", 
+            onClick: () => {
+              loadGame();
+              window.setState({ screen: 'stable' });
+            },
+            className: "text-lg px-8 py-4",
+            variant: "outline"
+          }) : ''}
         </div>
       </div>
     </div>
@@ -152,6 +280,12 @@ function SceneStable() {
           </div>
         </div>
         <div class="flex gap-2">
+          ${Button({ 
+            children: "データ管理", 
+            onClick: () => window.setState({ showSaveModal: true }),
+            variant: "outline",
+            className: "px-4"
+          })}
           ${Button({ 
             children: "配合", 
             onClick: () => window.setState({ screen: 'breeding_mare' }),
@@ -465,6 +599,94 @@ function SceneRaceResult() {
   `;
 }
 
+function RenderSaveModal() {
+  if (!window.state.showSaveModal) return '';
+  
+  return `
+    <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-[2.5rem] max-w-lg w-full p-8 space-y-6 relative">
+        <button class="absolute top-6 right-6 text-slate-400 hover:text-white font-bold cursor-pointer text-xl" onclick="window.setState({ showSaveModal: false })">✕</button>
+        
+        <h3 class="text-2xl font-black italic tracking-tighter uppercase text-indigo-400">DATA MANAGEMENT</h3>
+        <p class="text-slate-400 text-xs font-semibold">現在プレイ中のゲームデータを、ファイル出力してデバイスへ保存したり、お持ちのセーブデータファイルを読み込むことができます。</p>
+        
+        <div class="space-y-4 pt-4 border-t border-white/5 text-left text-white">
+          <!-- Local Auto Save State -->
+          <div class="bg-slate-800/40 rounded-2xl p-4 flex justify-between items-center">
+            <div>
+              <div class="font-bold text-sm">ブラウザ自動保存</div>
+              <div class="text-[10px] text-slate-500 mt-0.5">プレイ状況はブラウザへ自動的に適時セーブされています。</div>
+            </div>
+            <div class="text-emerald-400 font-bold text-xs flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> オートセーブON
+            </div>
+          </div>
+          
+          <!-- File Export -->
+          <div class="border border-white/5 bg-slate-950 p-5 rounded-2xl flex flex-col gap-3">
+            <div class="space-y-1">
+              <div class="font-bold text-sm">💾 セーブデータのファイル保存 (ダウンロード)</div>
+              <p class="text-[10px] text-slate-400 leading-relaxed">ゲーム進捗データをJSONファイルとしてデバイスにダウンロードします。スマホ等他の端末への引き継ぎやバックアップとして利用可能です。</p>
+            </div>
+            ${Button({
+              children: "セーブデータをダウンロード",
+              onClick: "window.exportSaveData()",
+              variant: "primary",
+              className: "w-full text-xs py-2.5"
+            })}
+          </div>
+
+          <!-- File Import -->
+          <div class="border border-white/5 bg-slate-950 p-5 rounded-2xl flex flex-col gap-3">
+            <div class="space-y-1">
+              <div class="font-bold text-sm">📂 セーブデータの読込 (アップロード)</div>
+              <p class="text-[10px] text-slate-400 leading-relaxed">過去にエクスポートしたセーブデータを読み込み、プレイを再開します。<br><span class="text-amber-500 font-semibold">※現在プレイ中のデータは上書きしてロードされます。</span></p>
+            </div>
+            <label class="block w-full">
+              <input type="file" accept=".json" onchange="window.importSaveData(event)" class="hidden" id="save-file-input">
+              <div class="bg-slate-800 text-center hover:bg-slate-700 text-white font-bold text-xs py-2.5 px-4 rounded-lg cursor-pointer transition-all active:scale-95 border border-white/5">
+                セーブデータファイルを選択する
+              </div>
+            </label>
+          </div>
+          
+          <!-- Danger Zone: Reset -->
+          <div class="pt-4 border-t border-white/5 flex gap-3">
+            ${Button({
+              children: "閉じる",
+              onClick: () => window.setState({ showSaveModal: false }),
+              variant: "secondary",
+              className: "flex-1 text-xs py-2.5"
+            })}
+            ${Button({
+              children: "データを完全初期化",
+              onClick: () => {
+                if (confirm("本当に保存されているすべてのゲームデータをリセットしますか？この操作は取り消せません。")) {
+                  localStorage.removeItem(SAVE_KEY);
+                  window.setState({
+                    screen: 'title',
+                    horses: [],
+                    mares: [...INITIAL_MARES],
+                    money: 10000000,
+                    week: 1,
+                    month: 1,
+                    year: 1,
+                    history: [],
+                    showSaveModal: false
+                  });
+                  alert("すべてのセーブデータを完全に初期化しました。");
+                }
+              },
+              variant: "danger",
+              className: "text-xs py-2.5"
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // --- Render Logic ---
 function render() {
   const app = document.getElementById('app');
@@ -483,7 +705,7 @@ function render() {
     default: content = SceneTitle();
   }
 
-  app.innerHTML = content;
+  app.innerHTML = content + RenderSaveModal();
   
   createIcons({
     icons: {
@@ -494,5 +716,6 @@ function render() {
 
 // Start
 document.addEventListener('DOMContentLoaded', () => {
+  loadGame();
   render();
 });
