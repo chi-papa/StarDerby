@@ -1,5 +1,6 @@
 {
-  "name": "Star Derby: Bloodline Galaxy",
-  "description": "A horse racing simulation game focusing on bloodlines, buffs, and star-themed races.",
-  "requestFramePermissions": []
+  "name": "ステラブリーダー",
+  "description": "星たちの導きと血統のケミストリーが織りなす、本格派・競走馬育成配合シミュレーションゲーム。お気に入りの繁殖牝馬と一押しの種牡馬を掛け合わせ、インブリードやニックス相性を駆使して無敗の伝説級ホースを誕生させよう！",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
