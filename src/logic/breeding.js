@@ -1,6 +1,4 @@
-import { Horse, Stallion, Mare, Stats, Pedigree, LineageId, GrowthType, Strategy, BreedingResult } from '../types';
-
-export function generateHorseName(): string {
+export function generateHorseName() {
   const prefixes = [
     'サンダー', 'ギャラクシー', 'ミルキー', 'スター', 'コスモ', 'ルナ', 'ソーラー',
     'ノヴァ', 'メテオ', 'コメット', 'アストロ', 'プラネット', 'オーロラ', 'スカイ',
@@ -14,7 +12,7 @@ export function generateHorseName(): string {
   return prefixes[Math.floor(Math.random() * prefixes.length)] + suffixes[Math.floor(Math.random() * suffixes.length)];
 }
 
-function getVowelType(char: string): keyof Stats | null {
+function getVowelType(char) {
   const vowels = {
     a: /[あかさたなはまやらわがざだばぱ]/,
     i: /[いきしちにひみりぎじぢびぴ]/,
@@ -32,7 +30,7 @@ function getVowelType(char: string): keyof Stats | null {
   return null;
 }
 
-export function checkBreeding(stallion: Stallion, mare: Mare): BreedingResult {
+export function checkBreeding(stallion, mare) {
   const id = Math.random().toString(36).substr(2, 9);
   const name = generateHorseName();
   
@@ -44,8 +42,8 @@ export function checkBreeding(stallion: Stallion, mare: Mare): BreedingResult {
   const stallionChars = new Set(stallionAncestors.join('').split(''));
   const mareChars = new Set(mareAncestors.join('').split(''));
   
-  const inbreedingChars: string[] = [];
-  const inbreedingEffects: (keyof Stats)[] = [];
+  const inbreedingChars = [];
+  const inbreedingEffects = [];
   
   stallionChars.forEach(char => {
     if (char !== '?' && mareChars.has(char)) {
@@ -72,8 +70,8 @@ export function checkBreeding(stallion: Stallion, mare: Mare): BreedingResult {
   
   const explosion = Math.random() < explosionChance;
   const explosionBonus = explosion ? 25 : 0;
-  const traits: string[] = [];
-  const growthType: GrowthType = stallion.growthType;
+  const traits = [];
+  const growthType = stallion.growthType;
 
   // 特殊文字による特性継承
   const specialChars = [
@@ -82,7 +80,15 @@ export function checkBreeding(stallion: Stallion, mare: Mare): BreedingResult {
     { char: '龍', trait: '神のオーラ' },
     { char: '神', trait: '神のオーラ' },
     { char: '王', trait: '大逃げ' },
-    { char: '帝', trait: '大逃げ' }
+    { char: '帝', trait: '大逃げ' },
+    { char: '威', trait: '威圧感' },
+    { char: '圧', trait: '威圧感' },
+    { char: '風', trait: '一陣の風' },
+    { char: '嵐', trait: '一陣の風' },
+    { char: '鋼', trait: '鋼の心臓' },
+    { char: '鉄', trait: '鋼の心臓' },
+    { char: '奇', trait: '奇跡の末脚' },
+    { char: '跡', trait: '奇跡の末脚' }
   ];
 
   inbreedingChars.forEach(char => {
@@ -101,70 +107,64 @@ export function checkBreeding(stallion: Stallion, mare: Mare): BreedingResult {
   });
 
   // 能力継承ロジック
-  const inheritStat = (s1: number, s2: number, bonus: number = 0, statName: keyof Stats, explosivePower: number = 100) => {
+  const inheritStat = (s1, s2, bonus, statName, explosivePower) => {
     const ep = explosivePower || 100;
     // 異次元設定: 親の能力の引き継ぎ率を上げ、ランダムベースも底上げ
-    const inheritedBase = (s1 + s2) * 0.20; // 15%ずつ -> 20%ずつ = 40%
-    const randomBase = 100 + Math.random() * 700; // 最小50 -> 100
+    const inheritedBase = (s1 * 0.15 + s2 * 0.25); 
+    const randomBase = 100 + Math.random() * 600;
     
     let base = inheritedBase + randomBase;
     
-    // 成長タイプによる上限の変動
     if (growthType === 'early') base -= 50;
     if (growthType === 'late') base += 50;
 
-    // インブリードによるバラツキ幅の拡大 + 種牡馬の爆発力による拡大
-    let varianceRange = 100 + ep; 
+    let varianceRange = 150 + ep * 1.5; 
     const inbreedingCount = inbreedingEffects.filter(e => e === statName).length;
     
     if (inbreedingCount > 0) {
-      varianceRange += inbreedingCount * 80;
+      varianceRange += inbreedingCount * 120;
     }
 
     let variance = (Math.random() - 0.5) * varianceRange;
-    let result = base + variance + bonus;
+    let result = base + variance + (bonus || 0);
     
     if (inbreedingCount > 0) {
-      result += inbreedingCount * 30;
+      result += inbreedingCount * 40;
     }
 
     if (isNick) {
-      result += 50;
+      result += 60;
     }
 
-    // 900以降の出現確率を5%程度にする -> 爆発力が高い場合はこの制限を緩める
-    if (result > 900) {
-      const limitBypassChance = 0.05 + (ep / 1000); // 爆発力150なら20%の確率で制限回避
+    if (result > 950) {
+      const limitBypassChance = 0.03 + (ep / 800); 
       if (Math.random() > limitBypassChance) {
-        // 900を超えた分を大幅に圧縮する
-        result = 900 + (result - 900) * 0.1;
+        result = 950 + (result - 950) * 0.05;
       }
     }
 
-    // 基本は1000だが、爆発力次第で超える
-    const hardLimit = 1000 + (ep > 100 ? (ep - 100) * 5 : 0); // 100を超えた分を5倍にして上限に加算
+    const hardLimit = 1050 + (ep > 120 ? (ep - 120) * 8 : -0); 
     return Math.max(50, Math.min(hardLimit, Math.round(result)));
   };
 
-  const maxStats: Stats = {
+  const maxStats = {
     speed: inheritStat(stallion.stats.speed || 500, mare.stats.speed || 500, explosionBonus * 4, 'speed', stallion.explosivePower),
     stamina: inheritStat(stallion.stats.stamina || 500, mare.stats.stamina || 500, explosionBonus * 4, 'stamina', stallion.explosivePower),
     guts: inheritStat(stallion.stats.guts || 500, mare.stats.guts || 500, explosionBonus * 4, 'guts', stallion.explosivePower),
     temperament: inheritStat(stallion.stats.temperament || 500, mare.stats.temperament || 500, inbreedingEffects.filter(e => e === 'temperament').length * 30, 'temperament', stallion.explosivePower),
     health: inheritStat(stallion.stats.health || 700, mare.stats.health || 700, explosionBonus * 2, 'health', stallion.explosivePower),
     luck: inheritStat(stallion.stats.luck || 700, mare.stats.luck || 700, explosionBonus * 2, 'luck', stallion.explosivePower),
-    explosiveness: Math.floor(Math.random() * 800) + 100, // 瞬発力は確率だけで決まる (100-900)
+    explosiveness: inheritStat(stallion.stats.explosiveness || 500, mare.stats.explosiveness || 500, explosionBonus * 5, 'explosiveness', (stallion.explosivePower || 100) * 1.5),
   };
 
-  // 気性ペナルティ（インブリードが多い場合）
   if (inbreedingChars.length > 2) {
     maxStats.temperament = Math.max(50, maxStats.temperament - (inbreedingChars.length * 60));
   }
 
-  const lineageId: LineageId = Math.random() > 0.5 ? stallion.lineageId : mare.lineageId;
-  const strategy: Strategy = traits.includes('大逃げ') ? 'escape' : stallion.strategy;
+  const lineageId = Math.random() > 0.5 ? stallion.lineageId : mare.lineageId;
+  const strategy = traits.includes('大逃げ') ? 'escape' : stallion.strategy;
 
-  const pedigree: Pedigree = {
+  const pedigree = {
     father: stallion.name,
     mother: mare.name,
     grandFathers: [stallion.pedigree.father, mare.pedigree.father],
@@ -177,7 +177,7 @@ export function checkBreeding(stallion: Stallion, mare: Mare): BreedingResult {
     ]
   };
 
-  const horse: Horse = {
+  const horse = {
     id,
     name,
     age: 0,

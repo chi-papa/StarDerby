@@ -1,13 +1,8 @@
-import { GoogleGenAI } from "@google/genai";
-import { Stallion, Mare, GameState } from "../types";
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
 export async function getBreedingAdvice(
-  gameState: GameState,
-  selectedMare?: Mare,
-  selectedStallion?: Stallion,
-  userMessage?: string
+  gameState,
+  selectedMare,
+  selectedStallion,
+  userMessage
 ) {
   const prompt = `
     あなたは伝説の馬主であり、ブリーディングのアドバイザーです。
@@ -23,8 +18,8 @@ export async function getBreedingAdvice(
     
     アドバイスの指針:
     1. 牝馬が未選択なら、所持している牝馬から選ぶよう促してください。
-    2. 牝馬が選択済みで種牡馬が未選択なら、相性の良い種牡馬をいくつか提案してください。
-    3. インブリード（血統の重なり）やニックス（相性）について触れてください。
+    2. 牝馬が選択済みで種牡馬が未選択なら、提案を出しつつも「配合の神秘」を強調してください。
+    3. インブリード（血統の重なり）については、「何かが起きるかもしれない」といった神秘的な表現を使い、具体的なステータス上昇値やどの文字が効くかといった詳細は伏せてください。
     4. 「流星になろう」というテーマに合わせて、異次元のスピードや伝説の血統について熱く語ってください。
     5. 回答は短く、キャラクター性を持たせてください。
     
@@ -38,11 +33,21 @@ export async function getBreedingAdvice(
   `;
 
   try {
-    const result = await genAI.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
+    const response = await fetch('/api/breeding-advice', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt }),
     });
-    const text = result.text;
+
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.advice;
+    
     // JSONを抽出
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {

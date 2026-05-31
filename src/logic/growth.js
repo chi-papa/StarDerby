@@ -1,14 +1,4 @@
-import { Horse, Stats, GrowthType } from '../types';
-
-/**
- * Calculates the stat growth for a horse based on its age and growth type.
- * 
- * Growth Types:
- * - early: Peaks at age 2-3, declines after age 5.
- * - normal: Peaks at age 3-5, declines after age 7.
- * - late: Peaks at age 5-7, stays strong longer.
- */
-export function calculateGrowth(horse: Horse): Stats {
+export function calculateGrowth(horse) {
   const { age, growthType, stats, maxStats } = horse;
   const newStats = { ...stats };
 
@@ -55,7 +45,7 @@ export function calculateGrowth(horse: Horse): Stats {
 /**
  * Returns a description of the horse's current physical state.
  */
-export function getPhysicalState(horse: Horse): string {
+export function getPhysicalState(horse) {
   const { age, growthType } = horse;
   
   if (growthType === 'early') {

@@ -1,6 +1,4 @@
-import { Horse, Race, Stats, Strategy, TrackCondition } from '../types';
-
-function getVowelBuff(name: string): Partial<Stats> {
+function getVowelBuff(name) {
   const vowels = {
     a: /[あかさたなはまやらわがざだばぱ]/,
     i: /[いきしちにひみりぎじぢびぴ]/,
@@ -10,7 +8,7 @@ function getVowelBuff(name: string): Partial<Stats> {
     dash: /[ー]/
   };
   
-  const buff: Partial<Stats> = { speed: 0, stamina: 0, guts: 0, temperament: 0, luck: 0, health: 0 };
+  const buff = { speed: 0, stamina: 0, guts: 0, temperament: 0, luck: 0, health: 0 };
   
   for (const char of name) {
     if (vowels.a.test(char)) buff.speed = (buff.speed || 0) + 5;
@@ -24,36 +22,12 @@ function getVowelBuff(name: string): Partial<Stats> {
   return buff;
 }
 
-export interface RaceProgress {
-  distance: number; // 0 to race.distance
-  speed: number;
-  staminaLeft: number;
-  x: number;
-  y: number;
-  lane: number;
-  commentary?: string;
-}
-
-export interface RaceResult {
-  horseId: string;
-  name: string;
-  strategy: Strategy;
-  time: number;
-  position: number;
-  logs: string[];
-  buffs: string[];
-  progress: RaceProgress[]; // Snapshots at intervals
-  rating?: number;
-  prediction?: string;
-}
-
-export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): RaceResult[] {
+export function simulateRace(playerHorse, enemies, race) {
   const allHorses = [playerHorse, ...enemies];
   
   // Calculate Ratings and Predictions
   const ratings = allHorses.map(h => {
     const s = h.stats;
-    // Simple rating formula: average of key stats + luck bonus
     const base = (Number(s.speed) + Number(s.stamina) + Number(s.guts) + Number(s.explosiveness)) / 4;
     const luckBonus = (Number(s.luck) / 10);
     return Math.floor(base + luckBonus);
@@ -80,8 +54,8 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
         health: Number(horse.stats.health) || 500,
         explosiveness: Number(horse.stats.explosiveness) || 500
       };
-      const activeBuffs: string[] = [];
-    const logs: string[] = [];
+      const activeBuffs = [];
+    const logs = [];
 
     // Vowel Buffs
     const vowelBuff = getVowelBuff(horse.name);
@@ -140,14 +114,14 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
       lane: index,
       currentDistance: 0,
       currentTime: 0,
-      currentSpeed: 0, // 0からスタートして加速する
+      currentSpeed: 0,
       isInjuredInRace: false,
-      // 根性はスタミナを補助する (1000スケールに合わせて調整)
       stamina: Math.max(100, (effectiveStats.stamina * 1.5) + (effectiveStats.guts * 0.5)),
       maxStamina: Math.max(100, (effectiveStats.stamina * 1.5) + (effectiveStats.guts * 0.5)),
-      progress: [] as RaceProgress[],
+      progress: [],
       finished: false,
       finishTime: 0,
+      debuffBuffer: 1.0, 
     };
   });
 
@@ -156,8 +130,7 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
   const stepTime = 0.05; // Simulation step
   
   // Injury chance based on health and luck
-  const getInjuryChance = (stats: Stats, fatigue: number) => {
-    // 大幅に低下させる (毎ステップ判定されるため、累積確率は非常に高くなりやすい)
+  const getInjuryChance = (stats, fatigue) => {
     const baseChance = 0.00001; 
     const healthFactor = (1000 - stats.health) / 2000000;
     const fatigueFactor = fatigue / 1000000;
@@ -168,28 +141,27 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
   let lastCommentaryStep = -1;
 
   // Strategy parameters
-  const getStrategyMult = (strategy: Strategy, stage: number, stamina: number, maxStamina: number) => {
+  const getStrategyMult = (strategy, stage, stamina, maxStamina) => {
     const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
-    // 体力がなくなるにつれスピードも下がる (スタミナ切れの影響を大きくする)
     const staminaFactor = staminaRatio > 0 ? 0.92 + (staminaRatio * 0.08) : 0.5;
 
     switch (strategy) {
-      case 'escape': // 逃げ: 最初から飛ばす
+      case 'escape': 
         if (stage < 0.4) return 1.15 * staminaFactor; 
         if (stage < 0.8) return 1.00 * staminaFactor;
         return 0.98 * staminaFactor;
-      case 'lead': // 先行: 前の方を維持
+      case 'lead': 
         if (stage < 0.3) return 1.05 * staminaFactor;
         if (stage < 0.7) return 1.02 * staminaFactor;
         return 1.05 * staminaFactor;
-      case 'insert': // 差し: 中団から終盤勝負
+      case 'insert': 
         if (stage < 0.4) return 0.98 * staminaFactor;
         if (stage < 0.7) return 1.02 * staminaFactor;
         return 1.15 * staminaFactor; 
-      case 'stay': // 追込: 最後方から一気に
+      case 'stay': 
         if (stage < 0.5) return 0.92 * staminaFactor; 
         if (stage < 0.8) return 1.00 * staminaFactor;
-        return 1.35 * staminaFactor; // 爆発力を調整 (1.75 -> 1.35)
+        return 1.35 * staminaFactor;
       default:
         return 1.0 * staminaFactor;
     }
@@ -215,7 +187,25 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
     globalTime += stepTime;
 
     horseStates.forEach(h => {
+      h.debuffBuffer = 1.0;
+    });
+
+    horseStates.forEach(h => {
       if (h.finished) return;
+
+      // 威圧感の判定 (周囲の馬の能力を下げる)
+      if (h.horse.traits?.includes('威圧感')) {
+        const effectRadius = 20;
+        horseStates.forEach(other => {
+          if (other.horse.id !== h.horse.id && !other.finished) {
+            const distDiff = Math.abs(other.currentDistance - h.currentDistance);
+            if (distDiff < effectRadius) {
+              // 威圧感：周囲の馬の速度を2%抑制する
+              other.debuffBuffer *= 0.98;
+            }
+          }
+        });
+      }
 
       const stage = Math.min(1, Math.max(0, h.currentDistance / race.distance));
       
@@ -257,18 +247,30 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
     
     // 特性: 流星の速さ (終盤に加速)
     if (h.horse.traits?.includes('流星の速さ') && stage > 0.8) {
-      traitBonus = 1.12;
+      traitBonus *= 1.12;
+    }
+    
+    // 特性: 一陣の風 (直線突入時にボーナス)
+    if (h.horse.traits?.includes('一陣の風') && stage > 0.75 && stage < 0.85) {
+      traitBonus *= 1.15;
+    }
+    
+    // 特性: 奇跡の末脚 (ゴール直前で超加速)
+    if (h.horse.traits?.includes('奇跡の末脚') && stage > 0.95) {
+      traitBonus *= 1.35;
     }
 
-    const targetSpeed = baseSpeed * strategyMult * randomFactor * gutsBonus * traitBonus;
+    const targetSpeed = baseSpeed * strategyMult * randomFactor * gutsBonus * traitBonus * h.debuffBuffer;
     
     // 瞬発力による加速ロジック
     // 瞬発力 (100-1000) が高いほど、目標速度に早く到達する
-    let accelerationBase = ((h.effectiveStats.explosiveness || 500) / 100) + 4; 
+    // バラツキを大きく持たせる (0.8 - 1.2倍のランダム)
+    const explosiveRandom = 0.8 + (Math.random() * 0.4);
+    let accelerationBase = (((h.effectiveStats.explosiveness || 500) / 80) + 5) * explosiveRandom; 
     
-    // 追い込み馬は終盤の加速力が凄まじい
+    // 追い込み馬は終盤の加速力が凄まじいが、ここでもバラツキを持たせる
     if (h.horse.strategy === 'stay' && stage > 0.8) {
-      accelerationBase *= 1.8;
+      accelerationBase *= (1.8 + Math.random() * 0.4);
     }
 
     if (h.currentSpeed < targetSpeed) {
@@ -311,11 +313,27 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
     const drainBase = Math.pow(currentSpeed / 45, 2.8); 
     const strategyDrain = { escape: 1.35, lead: 1.15, insert: 0.9, stay: 0.7 }[h.horse.strategy] || 1.0;
     
-    // 特性: 大逃げはスタミナ消費が非常に激しい
-    const traitDrain = h.horse.traits?.includes('大逃げ') ? 1.8 : 1.0;
+    // 特性によるスタミナ軽減
+    let traitDrain = 1.0;
+    if (h.horse.traits?.includes('大逃げ')) traitDrain *= 1.8;
+    if (h.horse.traits?.includes('鋼の心臓')) traitDrain *= 0.65; // スタミナ消費35%カット
 
     // 1000スケールに合わせて調整 (消費量を増やす)
     h.stamina -= drainBase * strategyDrain * traitDrain * stepTime * 1.2;
+
+    // 威圧感の判定 (周囲の馬の能力を下げる)
+    if (h.horse.traits?.includes('威圧感')) {
+      const effectRadius = 15;
+      horseStates.forEach(other => {
+        if (other.horse.id !== h.horse.id && !other.finished) {
+          const distDiff = Math.abs(other.currentDistance - h.currentDistance);
+          if (distDiff < effectRadius) {
+            // 威圧感：根性と瞬発力を一時的に下げる
+            other.currentSpeed *= 0.98; // 少し足が鈍る
+          }
+        }
+      });
+    }
 
     if (h.currentDistance >= race.distance || isNaN(h.currentDistance)) {
       // Interpolate exact finish time
@@ -361,7 +379,7 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
     }
   });
 
-  const finalResults: RaceResult[] = horseStates.map((h, idx) => ({
+  const finalResults = horseStates.map((h, idx) => ({
     horseId: h.horse.id,
     name: h.horse.name,
     strategy: h.horse.strategy,
@@ -440,8 +458,8 @@ export function simulateRace(playerHorse: Horse, enemies: Horse[], race: Race): 
   return finalResults;
 }
 
-export function generateEnemyHorses(count: number, raceGrade: string): Horse[] {
-  const enemies: Horse[] = [];
+export function generateEnemyHorses(count, raceGrade) {
+  const enemies = [];
   const gradeFactor = {
     'Newcomer': 250,
     'Maiden': 300,
@@ -466,7 +484,7 @@ export function generateEnemyHorses(count: number, raceGrade: string): Horse[] {
       luck: gradeFactor + bonus + Math.random() * 150,
       explosiveness: gradeFactor + bonus + Math.random() * 150,
     };
-    const strategies: Strategy[] = ['escape', 'lead', 'insert', 'stay'];
+    const strategies = ['escape', 'lead', 'insert', 'stay'];
     const strategy = isLegendary ? (i % 4 === 0 ? 'escape' : i % 4 === 1 ? 'stay' : strategies[Math.floor(Math.random() * strategies.length)]) : strategies[Math.floor(Math.random() * strategies.length)];
 
     const traits = [];
@@ -506,7 +524,7 @@ export function generateEnemyHorses(count: number, raceGrade: string): Horse[] {
   return enemies;
 }
 
-function generateLegendaryName(index: number): string {
+function generateLegendaryName(index) {
   const names = [
     'ジ・アルティメット',
     'ギャラクシー・エンド',
@@ -517,7 +535,7 @@ function generateLegendaryName(index: number): string {
   return names[index % names.length];
 }
 
-function generateEnemyName(): string {
+function generateEnemyName() {
   const prefixes = ['サンダー', 'ギャラクシー', 'ミルキー', 'スター', 'コスモ', 'ルナ', 'ソーラー', 'ノヴァ', 'メテオ', 'シリウス', 'ベガ'];
   const suffixes = ['ノヴァ', 'ブレイド', 'ロード', 'キング', 'クイーン', 'オーブ', 'ブレイブ', 'インパクト', 'エース', 'ハート'];
   return prefixes[Math.floor(Math.random() * prefixes.length)] + suffixes[Math.floor(Math.random() * suffixes.length)];

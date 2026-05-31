@@ -1,13 +1,12 @@
-import { Horse, Stallion, Mare, Race, Lineage } from '../types';
 
-export const LINEAGES: Lineage[] = [
+export const LINEAGES = [
   { id: 'speed', name: 'スピード系', description: '爆発的な速さを誇る系統' },
   { id: 'stamina', name: 'スタミナ系', description: '無尽蔵の体力を誇る系統' },
   { id: 'guts', name: '根性系', description: '勝負所での粘り強さが売りの系統' },
   { id: 'balance', name: 'バランス系', description: '欠点のない万能な系統' },
 ];
 
-export const STALLIONS: Stallion[] = [
+export const STALLIONS = [
   {
     id: 's1',
     name: 'シリウスオーブ',
@@ -552,7 +551,7 @@ export const STALLIONS: Stallion[] = [
   }
 ];
 
-export const INITIAL_MARES: Mare[] = [
+export const INITIAL_MARES = [
   {
     id: 'm1',
     name: 'コスモクイーン',
