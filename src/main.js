@@ -149,13 +149,14 @@ window.handleAction = (action, data) => {
     case 'CONFIRM_BREEDING':
       const mare = window.state.mares.find(m => m.id === window.state.selectedMareId);
       const stallion = STALLIONS.find(s => s.id === window.state.selectedStallionId);
-      if (window.state.money < stallion.fee) {
+      const breedingFee = stallion.price || stallion.fee || 0;
+      if (window.state.money < breedingFee) {
         alert("資金が足りません");
         return;
       }
       const res = checkBreeding(stallion, mare);
       window.setState({ 
-        money: window.state.money - stallion.fee,
+        money: window.state.money - breedingFee,
         breedingResult: res,
         screen: 'stable',
         horses: [...window.state.horses, res.horse]
@@ -411,7 +412,7 @@ function SceneBreedingStallion() {
                onclick="window.setState({ screen: 'breeding_confirm', selectedStallionId: '${s.id}' })">
             <div class="flex justify-between items-start mb-4">
               <h3 class="text-xl font-black italic tracking-tight uppercase">${s.name}</h3>
-              <span class="text-emerald-400 font-bold text-xs">${formatMoney(s.fee)}</span>
+              <span class="text-emerald-400 font-bold text-xs">${formatMoney(s.price || s.fee)}</span>
             </div>
             <div class="grid grid-cols-2 gap-4">
                <div>
@@ -452,7 +453,7 @@ function SceneBreedingConfirm() {
             <div class="text-xl font-black uppercase">${stallion.name}</div>
           </div>
         </div>
-        <div class="text-2xl font-black text-emerald-400">FEES: ${formatMoney(stallion.fee)}</div>
+        <div class="text-2xl font-black text-emerald-400">FEES: ${formatMoney(stallion.price || stallion.fee)}</div>
         <div class="flex gap-4">
           ${Button({ children: "配合を行う", onClick: () => window.handleAction('CONFIRM_BREEDING'), className: "flex-1 py-4 text-lg" })}
           ${Button({ children: "キャンセル", onClick: () => window.setState({ screen: 'breeding_stallion' }), variant: "outline", className: "px-8" })}
