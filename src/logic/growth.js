@@ -34,9 +34,22 @@ export function calculateGrowth(horse) {
   // Apply growth/decline to main stats
   if (growthFactor !== 0) {
     const ms = maxStats || stats;
-    newStats.speed = Math.max(50, Math.min(ms.speed || 500, Math.floor((newStats.speed || 300) + (ms.speed || 500) * growthFactor)));
-    newStats.stamina = Math.max(50, Math.min(ms.stamina || 500, Math.floor((newStats.stamina || 300) + (ms.stamina || 500) * growthFactor)));
-    newStats.guts = Math.max(50, Math.min(ms.guts || 500, Math.floor((newStats.guts || 300) + (ms.guts || 500) * growthFactor)));
+    let speedGrowth = Math.floor((ms.speed || 500) * growthFactor);
+    let staminaGrowth = Math.floor((ms.stamina || 500) * growthFactor);
+    let gutsGrowth = Math.floor((ms.guts || 500) * growthFactor);
+
+    if (growthFactor > 0) {
+      if (typeof window !== 'undefined' && window.isMilestoneUnlocked && window.isMilestoneUnlocked('legendary_pace')) {
+        speedGrowth = Math.floor(speedGrowth * 1.15);
+      }
+      if (typeof window !== 'undefined' && window.isMilestoneUnlocked && window.isMilestoneUnlocked('iron_lungs')) {
+        staminaGrowth = Math.floor(staminaGrowth * 1.15);
+      }
+    }
+
+    newStats.speed = Math.max(50, Math.min(ms.speed || 500, (newStats.speed || 300) + speedGrowth));
+    newStats.stamina = Math.max(50, Math.min(ms.stamina || 500, (newStats.stamina || 300) + staminaGrowth));
+    newStats.guts = Math.max(50, Math.min(ms.guts || 500, (newStats.guts || 300) + gutsGrowth));
   }
 
   return newStats;

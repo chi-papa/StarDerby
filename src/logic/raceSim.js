@@ -27,9 +27,17 @@ export function simulateRace(playerHorse, enemies, race) {
   
   // Calculate Ratings and Predictions
   const ratings = allHorses.map(h => {
-    const s = h.stats;
-    const base = (Number(s.speed) + Number(s.stamina) + Number(s.guts) + Number(s.explosiveness)) / 4;
-    const luckBonus = (Number(s.luck) / 10);
+    let speed = Number(h.stats.speed) || 500;
+    let stamina = Number(h.stats.stamina) || 500;
+    
+    if (h.training && h.training.activeBoost) {
+      const boost = h.training.activeBoost;
+      if (boost.stat === 'speed') speed += boost.amount;
+      if (boost.stat === 'stamina') stamina += boost.amount;
+    }
+    
+    const base = (speed + stamina + Number(h.stats.guts) + Number(h.stats.explosiveness)) / 4;
+    const luckBonus = (Number(h.stats.luck) / 10);
     return Math.floor(base + luckBonus);
   });
 
@@ -45,9 +53,18 @@ export function simulateRace(playerHorse, enemies, race) {
 
   // Assign lanes and initial state
     const horseStates = allHorses.map((horse, index) => {
+      let speedVal = Number(horse.stats.speed) || 500;
+      let staminaVal = Number(horse.stats.stamina) || 500;
+
+      if (horse.training && horse.training.activeBoost) {
+        const boost = horse.training.activeBoost;
+        if (boost.stat === 'speed') speedVal += boost.amount;
+        if (boost.stat === 'stamina') staminaVal += boost.amount;
+      }
+
       let effectiveStats = { 
-        speed: Number(horse.stats.speed) || 500,
-        stamina: Number(horse.stats.stamina) || 500,
+        speed: speedVal,
+        stamina: staminaVal,
         guts: Number(horse.stats.guts) || 500,
         temperament: Number(horse.stats.temperament) || 500,
         luck: Number(horse.stats.luck) || 500,
@@ -66,10 +83,62 @@ export function simulateRace(playerHorse, enemies, race) {
     effectiveStats.luck += vowelBuff.luck || 0;
     effectiveStats.health += vowelBuff.health || 0;
 
+    // Track Condition / Weather System
+    const weather = race.weather || 'Sunny';
+    let rainPenalty = false;
+    let mudPenalty = false;
+
+    if (weather === 'Rainy') {
+      const hasRainResistance = effectiveStats.stamina >= 700 || effectiveStats.guts >= 650;
+      if (hasRainResistance) {
+        activeBuffs.push('🌧️ 雨天対抗');
+        effectiveStats.speed *= 1.01;
+        logs.push(`${horse.name}は雨天適性が高く、力強くコースを走っている！`);
+      } else {
+        effectiveStats.speed *= 0.95;
+        rainPenalty = true;
+        activeBuffs.push('☔ 雨の洗礼');
+        logs.push(`${horse.name}は降りしきる雨に苦戦している...`);
+      }
+    } else if (weather === 'Muddy') {
+      const hasMudResistance = effectiveStats.guts >= 720 || effectiveStats.health >= 700 || horse.lineageId === 'stamina';
+      if (hasMudResistance) {
+        activeBuffs.push('🌊 泥濘克服');
+        effectiveStats.speed *= 0.98;
+        logs.push(`${horse.name}は泥濘をものともせず突き進む！`);
+      } else {
+        effectiveStats.speed *= 0.88;
+        mudPenalty = true;
+        activeBuffs.push('🐾 不良泥濘');
+        logs.push(`${horse.name}はドロドロの不良馬場に大苦戦している！`);
+      }
+    } else {
+      activeBuffs.push('☀️ 良馬場快走');
+    }
+
     // Track Condition Buff
     if (race.trackCondition === 'Heavy' && horse.lineageId === 'stamina') {
       effectiveStats.speed *= 1.1;
       activeBuffs.push('重馬場巧者');
+    }
+
+    // Theme-based Event modifiers
+    if (race.themeId === 'speed_sprint') {
+      effectiveStats.speed *= 1.25;
+      effectiveStats.stamina *= 0.85;
+      activeBuffs.push('超光速ブースト');
+    } else if (race.themeId === 'stamina_marathon') {
+      effectiveStats.speed *= 0.8;
+      effectiveStats.stamina *= 1.4;
+      activeBuffs.push('万能スタミナ魂');
+    } else if (race.themeId === 'cosmo_classic') {
+      effectiveStats.speed *= 1.15;
+      effectiveStats.stamina *= 1.15;
+      activeBuffs.push('コスモチャージ');
+    } else if (race.themeId === 'black_hole_inferno') {
+      effectiveStats.speed *= 1.25;
+      effectiveStats.stamina *= 1.25;
+      activeBuffs.push('暗黒の闘志');
     }
     
     // Distance Aptitude
@@ -122,6 +191,8 @@ export function simulateRace(playerHorse, enemies, race) {
       finished: false,
       finishTime: 0,
       debuffBuffer: 1.0, 
+      rainPenalty,
+      mudPenalty,
     };
   });
 
@@ -318,8 +389,16 @@ export function simulateRace(playerHorse, enemies, race) {
     if (h.horse.traits?.includes('大逃げ')) traitDrain *= 1.8;
     if (h.horse.traits?.includes('鋼の心臓')) traitDrain *= 0.65; // スタミナ消費35%カット
 
+    // 天候によるスタミナ消費への影響
+    let weatherDrain = 1.0;
+    if (race.weather === 'Rainy') {
+      weatherDrain = h.rainPenalty ? 1.15 : 1.02;
+    } else if (race.weather === 'Muddy') {
+      weatherDrain = h.mudPenalty ? 1.30 : 1.08;
+    }
+
     // 1000スケールに合わせて調整 (消費量を増やす)
-    h.stamina -= drainBase * strategyDrain * traitDrain * stepTime * 1.2;
+    h.stamina -= drainBase * strategyDrain * traitDrain * weatherDrain * stepTime * 1.2;
 
     // 威圧感の判定 (周囲の馬の能力を下げる)
     if (h.horse.traits?.includes('威圧感')) {
@@ -382,6 +461,8 @@ export function simulateRace(playerHorse, enemies, race) {
   const finalResults = horseStates.map((h, idx) => ({
     horseId: h.horse.id,
     name: h.horse.name,
+    color: h.horse.color || '#424242',
+    isBlessed: !!h.horse.isBlessed,
     strategy: h.horse.strategy,
     time: h.finishTime,
     position: 0,
@@ -389,7 +470,9 @@ export function simulateRace(playerHorse, enemies, race) {
     buffs: h.activeBuffs,
     progress: h.progress,
     rating: ratings[idx],
-    prediction: predictions[idx]
+    prediction: predictions[idx],
+    stats: h.horse.stats,
+    traits: h.horse.traits || []
   }));
 
   finalResults.sort((a, b) => a.time - b.time);
@@ -415,7 +498,15 @@ export function simulateRace(playerHorse, enemies, race) {
     const third = sortedAtStep[2];
 
     if (step === 0) {
-      commentary = race.grade === 'G-ultra' ? "全宇宙が注目する伝説のレース、宇宙創世杯が今、幕を開けます！" : "各馬、一斉にスタートしました！きれいなスタートです。";
+      commentary = race.grade === 'G-ultra' ? "全宇宙が注目する伝説 of レース、宇宙創世杯が今、幕を開けます！" : "各馬、一斉にスタートしました！きれいなスタートです。";
+    } else if (step === Math.floor(maxProgressLength * 0.05)) {
+      if (race.weather === 'Rainy') {
+        commentary = "降り続ける雨により重馬場となっています！足元をとられやすい過酷な戦いです！";
+      } else if (race.weather === 'Muddy') {
+        commentary = "コースは完全に泥の海！最悪の不良馬場となっており、タフなスタミナと根性が要求されます！";
+      } else {
+        commentary = "雲一つない快晴、絶好の良馬場です！極限のハイスピードレースが期待できるでしょう！";
+      }
     } else if (step === Math.floor(maxProgressLength * 0.1)) {
       if (leader.horse.traits?.includes('大逃げ')) {
         commentary = `${leader.horse.name}が猛烈な勢いでハナを切る！大逃げの構えだ！`;
