@@ -23,7 +23,9 @@ function getVowelBuff(name) {
 }
 
 export function simulateRace(playerHorse, enemies, race) {
-  const allHorses = [playerHorse, ...enemies];
+  const playerHorsesArr = Array.isArray(playerHorse) ? playerHorse : [playerHorse];
+  const markedPlayers = playerHorsesArr.map(ph => ({ ...ph, isPlayer: true }));
+  const allHorses = [...markedPlayers, ...enemies];
   
   // Calculate Ratings and Predictions
   const ratings = allHorses.map(h => {
@@ -249,7 +251,8 @@ export function simulateRace(playerHorse, enemies, race) {
       staminaLeft: h.maxStamina,
       x: 0,
       y: 100 + (h.lane * 40),
-      lane: h.lane
+      lane: h.lane,
+      finished: false
     });
   });
 
@@ -368,7 +371,8 @@ export function simulateRace(playerHorse, enemies, race) {
           staminaLeft: Math.max(0, h.stamina),
           x: (h.currentDistance / race.distance) * 1000,
           y: 100 + (h.lane * 40),
-          lane: h.lane
+          lane: h.lane,
+          finished: true
         });
       }
     }
@@ -431,7 +435,8 @@ export function simulateRace(playerHorse, enemies, race) {
         staminaLeft: Math.max(0, h.stamina),
         x: 1000,
         y: 100 + (h.lane * 40),
-        lane: h.lane
+        lane: h.lane,
+        finished: true
       });
     }
 
@@ -443,7 +448,8 @@ export function simulateRace(playerHorse, enemies, race) {
         staminaLeft: Math.max(0, h.stamina),
         x: (h.currentDistance / race.distance) * 1000,
         y: 100 + (h.lane * 40),
-        lane: h.lane
+        lane: h.lane,
+        finished: !!h.finished
       });
     }
     });
@@ -463,6 +469,7 @@ export function simulateRace(playerHorse, enemies, race) {
     name: h.horse.name,
     color: h.horse.color || '#424242',
     isBlessed: !!h.horse.isBlessed,
+    isPlayer: !!h.horse.isPlayer,
     strategy: h.horse.strategy,
     time: h.finishTime,
     position: 0,
@@ -472,7 +479,8 @@ export function simulateRace(playerHorse, enemies, race) {
     rating: ratings[idx],
     prediction: predictions[idx],
     stats: h.horse.stats,
-    traits: h.horse.traits || []
+    traits: h.horse.traits || [],
+    maxStamina: h.maxStamina
   }));
 
   finalResults.sort((a, b) => a.time - b.time);
@@ -482,6 +490,9 @@ export function simulateRace(playerHorse, enemies, race) {
 
   // Generate Commentary
   const maxProgressLength = Math.max(...horseStates.map(h => h.progress.length));
+  const isMultiPlayer = markedPlayers.length > 1;
+  const playerNamesStr = markedPlayers.map(p => p.name).join('＆');
+
   for (let step = 0; step < maxProgressLength; step++) {
     const stage = step / maxProgressLength;
     let commentary = "";
@@ -497,13 +508,19 @@ export function simulateRace(playerHorse, enemies, race) {
     const second = sortedAtStep[1];
     const third = sortedAtStep[2];
 
+    const topPlayers = sortedAtStep.filter(h => h.horse.isPlayer);
+
     if (step === 0) {
-      commentary = race.grade === 'G-ultra' ? "全宇宙が注目する伝説 of レース、宇宙創世杯が今、幕を開けます！" : "各馬、一斉にスタートしました！きれいなスタートです。";
+      if (isMultiPlayer) {
+        commentary = `【同厩舎対決】このレースには期待の ${playerNamesStr} が揃って出走！激しいチームメイト対決にファンの注目が集まります！`;
+      } else {
+        commentary = race.grade === 'G-ultra' ? "全宇宙が注目する伝説 of レース、宇宙創世杯が今、幕を開けます！" : "各馬、一斉にスタートしました！きれいなスタートです。";
+      }
     } else if (step === Math.floor(maxProgressLength * 0.05)) {
       if (race.weather === 'Rainy') {
         commentary = "降り続ける雨により重馬場となっています！足元をとられやすい過酷な戦いです！";
       } else if (race.weather === 'Muddy') {
-        commentary = "コースは完全に泥の海！最悪の不良馬場となっており、タフなスタミナと根性が要求されます！";
+        commentary = "コースは完全に泥の海！最悪 of 不良馬場となっており、タフなスタミナと根性が要求されます！";
       } else {
         commentary = "雲一つない快晴、絶好の良馬場です！極限のハイスピードレースが期待できるでしょう！";
       }
@@ -520,22 +537,36 @@ export function simulateRace(playerHorse, enemies, race) {
         commentary = "第2コーナーを回って向こう正面。隊列は縦長になってきました。";
       }
     } else if (step === Math.floor(maxProgressLength * 0.4)) {
-      commentary = `依然として${leader.horse.name}が先頭。2番手には${second.horse.name}。`;
+      if (isMultiPlayer && topPlayers.length >= 2 && sortedAtStep.indexOf(topPlayers[0]) <= 2 && sortedAtStep.indexOf(topPlayers[1]) <= 5) {
+        commentary = `驚いた！同厩舎の ${topPlayers[0].horse.name} と ${topPlayers[1].horse.name} が上位をキープしてお互いを牽制しています！`;
+      } else {
+        commentary = `依然として${leader.horse.name}が先頭。2番手には${second.horse.name}。`;
+      }
     } else if (step === Math.floor(maxProgressLength * 0.55)) {
       commentary = "さあ、第3コーナー！後方の各馬も一気に差を詰めてくる！";
     } else if (step === Math.floor(maxProgressLength * 0.7)) {
       commentary = "第4コーナーをカーブして直線！さあ、ここからが勝負だ！";
     } else if (step === Math.floor(maxProgressLength * 0.8)) {
-      const stayHorse = sortedAtStep.find(h => h.horse.strategy === 'stay');
-      if (stayHorse && sortedAtStep.indexOf(stayHorse) < 5) {
-        commentary = `外から一気に${stayHorse.horse.name}が飛んできた！凄まじい追い込みだ！`;
+      if (isMultiPlayer && topPlayers.length >= 2 && sortedAtStep.indexOf(topPlayers[0]) <= 3 && sortedAtStep.indexOf(topPlayers[1]) <= 6) {
+        commentary = `見応えあるデッドヒート！ ${topPlayers[0].horse.name} が先頭を猛追し、同厩舎の ${topPlayers[1].horse.name} も素晴らしい脚の伸びを見せている！`;
       } else {
-        commentary = `残り400m！${leader.horse.name}がまだ粘っている！外から${second.horse.name}！`;
+        const stayHorse = sortedAtStep.find(h => h.horse.strategy === 'stay');
+        if (stayHorse && sortedAtStep.indexOf(stayHorse) < 5) {
+          commentary = `外から一気に${stayHorse.horse.name}が飛んできた！凄まじい追い込みだ！`;
+        } else {
+          commentary = `残り400m！${leader.horse.name}がまだ粘っている！外から${second.horse.name}！`;
+        }
       }
     } else if (step === Math.floor(maxProgressLength * 0.9)) {
       commentary = `残り200m！${leader.horse.name}か！？${second.horse.name}か！？${third ? third.horse.name + 'も突っ込んできた！' : ''}`;
     } else if (step === maxProgressLength - 5) {
-      commentary = "最後の叩き合い！栄冠は誰の手に！？";
+      if (isMultiPlayer && leader.horse.isPlayer && second.horse.isPlayer) {
+        commentary = `なんという展開！同厩舎の ${leader.horse.name} と ${second.horse.name} が完全に抜け出した！歓喜のワンツーフィニッシュ体制！`;
+      } else if (isMultiPlayer && leader.horse.isPlayer) {
+        commentary = `先頭は ${leader.horse.name}！ 同僚の ${second.horse.name} も懸命に続こうと追いかける！`;
+      } else {
+        commentary = "最後の叩き合い！栄冠は誰の手に！？";
+      }
     }
 
     if (commentary) {

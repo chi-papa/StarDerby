@@ -7,6 +7,10 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
     return Math.max(...raceResult.map(r => r.progress.length));
   }, [raceResult]);
 
+  const playerHorseCount = useMemo(() => {
+    return raceResult.filter(r => r.isPlayer || r.horseId === selectedHorseId || (Array.isArray(selectedHorseId) && selectedHorseId.includes(r.horseId))).length;
+  }, [raceResult, selectedHorseId]);
+
   const [step, setStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [speedMultiplier, setSpeedMultiplier] = useState(1.5);
@@ -268,6 +272,23 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
         </div>
       )}
 
+      {/* Stablemates Duel Event Banner */}
+      {playerHorseCount > 1 && (
+        <div className="bg-gradient-to-r from-amber-600/15 via-indigo-600/15 to-rose-600/15 border border-indigo-500/30 p-4 rounded-3xl flex items-center justify-between shadow-[0_4px_30px_rgba(99,102,241,0.06)] animate-pulse relative select-none">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl animate-bounce">⚔️</span>
+            <div className="text-left">
+              <h4 className="text-xs font-black text-amber-400 uppercase tracking-widest leading-none">同一厩舎同門対決 / Stablemate Showdown</h4>
+              <p className="text-[10px] text-slate-300 font-bold mt-1">同厩舎のライバル精鋭たちが誇りをかけ、極上のターフで頂点を競う世紀のドリーム対抗戦！</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[8px] font-black tracking-widest text-indigo-400 block uppercase leading-none font-mono">所有馬参戦数</span>
+            <span className="text-md font-black text-white font-mono mt-0.5 block">{playerHorseCount}頭 出走</span>
+          </div>
+        </div>
+      )}
+
       {/* Header Info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
         <div className="text-left">
@@ -308,7 +329,7 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
           </button>
 
           <div className="flex items-center gap-1 border-l border-white/5 pl-2">
-            {[1, 1.5, 3, 5].map(mult => (
+            {[1, 1.5, 3, 5, 10, 30].map(mult => (
               <button
                 key={mult}
                 onClick={() => setSpeedMultiplier(mult)}
@@ -323,17 +344,6 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
               </button>
             ))}
           </div>
-
-          <button
-            onClick={onFinish}
-            className="ml-2 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-black text-[10px] px-3 py-1.5 rounded-xl hover:from-indigo-500 hover:to-indigo-400 border border-indigo-500/20 transition-all flex items-center gap-1 hover:scale-105 active:scale-95 cursor-pointer"
-            id="simulation-skip-btn"
-          >
-            <span>スキップ</span>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -359,7 +369,7 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
         {/* Outer Rail decorations */}
         <div className="space-y-3.5 relative">
           {horsePositions.map((h) => {
-            const isPlayer = h.horseId === selectedHorseId;
+            const isPlayer = h.isPlayer || h.horseId === selectedHorseId || (Array.isArray(selectedHorseId) && selectedHorseId.includes(h.horseId));
             const currentStanding = standingMap[h.horseId] || 12;
             const percentage = h.distance / currentRace.distance;
             const mappedLeft = 4 + (percentage * 81); // Scaled safe track mapping (4% start, 85% goal max)
@@ -373,6 +383,11 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
               >
                 {/* Lane line grid */}
                 <div className={`absolute inset-x-0 bottom-0 border-b ${trackTheme.fieldBorder} pointer-events-none`} />
+
+                {/* Stablemate duel premium lane glow trail */}
+                {isPlayer && playerHorseCount > 1 && (
+                  <div className="bg-gradient-to-r from-indigo-600/10 via-amber-500/5 to-transparent shadow-[inset_0_0_15px_rgba(99,102,241,0.06)] h-full absolute inset-0 pointer-events-none z-0 rounded-lg" />
+                )}
 
                 {/* Mud splotches and hoof prints on the lane tracks */}
                 {currentRace.weather === 'Muddy' && (
@@ -520,6 +535,19 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
         </div>
       </div>
 
+      {/* Prominent Quick Skip Button for Mobile/Desktop */}
+      {!isCompleted && (
+        <button
+          onClick={onFinish}
+          className="w-full py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-black text-sm rounded-2xl shadow-[0_4px_20px_rgba(99,102,241,0.3)] border border-white/10 transition-all flex items-center justify-center gap-2 hover:skew-x-1 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+        >
+          <span>⚡ レース中途で結果をすぐに見る（結果へスキップ）</span>
+          <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
+
       {/* Floating Real-time Commentator Console */}
       <div className="bg-slate-900 border border-white/5 rounded-2xl flex flex-col p-4 shadow-xl relative min-h-[4.5rem] justify-center text-center overflow-hidden" id="live-commentary-widget">
         <div className="absolute top-1 right-2 text-[7px] text-indigo-400 font-black tracking-widest uppercase select-none opacity-60">
@@ -542,7 +570,7 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
       {/* Live Checkpoint Standings / Leaderboard Overlay */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {standings.slice(0, 3).map((h, i) => {
-          const isPlayer = h.horseId === selectedHorseId;
+          const isPlayer = h.isPlayer || h.horseId === selectedHorseId || (Array.isArray(selectedHorseId) && selectedHorseId.includes(h.horseId));
           const percentage = Math.round((h.distance / currentRace.distance) * 100);
 
           return (
@@ -616,8 +644,6 @@ export function RaceSimulationComponent({ raceResult, currentRace, selectedHorse
 }
 
 // Global mount orchestration helper
-let raceSimulationRoot = null;
-
 export function mountRaceSimulation(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -625,15 +651,16 @@ export function mountRaceSimulation(containerId) {
   const { raceResult, currentRace, selectedHorseId } = window.state;
   if (!raceResult || !currentRace) return;
 
-  if (!raceSimulationRoot) {
-    raceSimulationRoot = createRoot(container);
-  }
+  const root = createRoot(container);
 
   const handleFinish = () => {
+    try {
+      root.unmount();
+    } catch (e) {}
     window.setState({ screen: 'race_result', animatedResults: false });
   };
 
-  raceSimulationRoot.render(
+  root.render(
     <RaceSimulationComponent
       raceResult={raceResult}
       currentRace={currentRace}
